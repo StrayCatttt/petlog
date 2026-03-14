@@ -30,5 +30,14 @@
         <meta-data android:name="flutterEmbedding" android:value="2"/>
         <!-- AdMob テスト用ID（リリース前に本番IDに変更）-->
         <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9269179060215740~2597869719"/>
+        <!-- ウィジェット (PRO) -->
+        <receiver android:name=".widget.PetPhotoWidget" android:exported="true" android:label="ぺちろぐ 写真">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/pet_photo_widget_info"/>
+        </receiver>
+        <receiver android:name=".widget.PetCountWidget" android:exported="true" android:label="ぺちろぐ カウント">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/pet_count_widget_info"/>
+        </receiver>
     </application>
 </manifest>

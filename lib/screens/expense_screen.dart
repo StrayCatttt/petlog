@@ -52,6 +52,22 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
             _MonthSwitcher(year: provider.expenseYear, month: provider.expenseMonth,
               onPrev: () async { await provider.navigateExpenseMonth(-1); await _loadPastTotals(); },
               onNext: () async { await provider.navigateExpenseMonth(1); await _loadPastTotals(); }),
+            // ペットフィルタータブ
+            if (provider.activePets.length > 1) ...[
+              const SizedBox(height: 12),
+              SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+                // 「すべて」タブ
+                GestureDetector(onTap: () => provider.setExpensePetFilter(null), child: Container(
+                  margin: const EdgeInsets.only(right: 8), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(color: provider.expensePetFilter == null ? AppColors.caramel : AppColors.caramelPale, borderRadius: BorderRadius.circular(20)),
+                  child: Text('🌐 すべて', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: provider.expensePetFilter == null ? Colors.white : AppColors.textMid)))),
+                // 各ペットタブ
+                ...provider.activePets.map((pet) => GestureDetector(onTap: () => provider.setExpensePetFilter(pet.id), child: Container(
+                  margin: const EdgeInsets.only(right: 8), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(color: provider.expensePetFilter == pet.id ? AppColors.caramel : AppColors.caramelPale, borderRadius: BorderRadius.circular(20)),
+                  child: Text('${pet.species.emoji} ${pet.name}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: provider.expensePetFilter == pet.id ? Colors.white : AppColors.textMid))))),
+              ])),
+            ],
           ]),
         )),
         SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), child: _DonutCard(provider: provider))),

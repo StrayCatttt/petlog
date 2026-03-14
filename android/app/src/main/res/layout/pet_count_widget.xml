@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FDF5EA"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="12dp">
+    <TextView android:id="@+id/widget_emoji"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🐾"
+        android:textSize="28sp" />
+    <TextView android:id="@+id/widget_days"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="一緒に ??? 日"
+        android:textColor="#C8873A"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+    <TextView android:id="@+id/widget_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="ぺちろぐ"
+        android:textColor="#7A6555"
+        android:textSize="11sp" />
+</LinearLayout>
