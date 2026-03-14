@@ -7,6 +7,7 @@ import 'repositories/app_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/diary_screen.dart';
+import 'screens/album_screen.dart';
 import 'screens/expense_screen.dart';
 import 'screens/other_screens.dart';
 

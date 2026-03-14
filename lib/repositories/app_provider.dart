@@ -3,25 +3,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import 'database.dart';
 
+class MonthTotal {
+  final int month;
+  final int total;
+  MonthTotal(this.month, this.total);
+}
+
 class AppProvider extends ChangeNotifier {
   final _db = AppDatabase.instance;
 
-  // ─── State ─────────────────────────────────────────
   List<Pet> _pets = [];
   int _activePetIndex = 0;
   int get activePetIndex => _activePetIndex;
+
   List<DiaryEntry> _diaryEntries = [];
   List<Expense> _expenses = [];
   int _expenseYear  = DateTime.now().year;
   int _expenseMonth = DateTime.now().month;
   bool _isPro = false;
-
-  // 写真枠
-  int _quotaUsed   = 0;
-  int _quotaBonus  = 0;
+  int _quotaUsed = 0;
+  int _quotaBonus = 0;
   bool _rewardWatched = false;
 
-  // ─── Getters ───────────────────────────────────────
   List<Pet> get pets => _pets;
   Pet? get activePet => _pets.isEmpty ? null : _pets[_activePetIndex];
   List<DiaryEntry> get diaryEntries => _diaryEntries;
@@ -35,7 +38,6 @@ class AppProvider extends ChangeNotifier {
   int get quotaTotal => _isPro ? 30 : 1 + _quotaBonus;
   int get quotaRemaining => (quotaTotal - _quotaUsed).clamp(0, 30);
 
-  // ─── Init ──────────────────────────────────────────
   Future<void> init() async {
     await _loadPrefs();
     await _loadPets();
@@ -47,18 +49,20 @@ class AppProvider extends ChangeNotifier {
     final today = _todayStr();
     final savedDate = prefs.getString('quota_date') ?? '';
     if (savedDate == today) {
-      _quotaUsed  = prefs.getInt('quota_used')  ?? 0;
+      _quotaUsed = prefs.getInt('quota_used') ?? 0;
       _quotaBonus = prefs.getInt('quota_bonus') ?? 0;
       _rewardWatched = prefs.getString('reward_date') == today;
+    } else {
+      _quotaUsed = 0; _quotaBonus = 0; _rewardWatched = false;
     }
   }
 
-  // ─── Pet ───────────────────────────────────────────
   Future<void> _loadPets() async {
     _pets = await _db.getAllPets();
     final prefs = await SharedPreferences.getInstance();
     final savedId = prefs.getInt('active_pet_id') ?? 0;
-    _activePetIndex = _pets.indexWhere((p) => p.id == savedId).clamp(0, _pets.isEmpty ? 0 : _pets.length - 1);
+    final idx = _pets.indexWhere((p) => p.id == savedId);
+    _activePetIndex = idx >= 0 ? idx : 0;
     if (activePet != null) await _loadDiary();
     notifyListeners();
   }
@@ -68,6 +72,7 @@ class AppProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('active_pet_id', activePet?.id ?? 0);
     await _loadDiary();
+    await loadExpenses();
     notifyListeners();
   }
 
@@ -89,18 +94,19 @@ class AppProvider extends ChangeNotifier {
     await _db.deletePet(id);
     _pets = await _db.getAllPets();
     _activePetIndex = 0;
+    _diaryEntries = [];
+    _expenses = [];
     if (activePet != null) await _loadDiary();
     notifyListeners();
   }
 
-  // ─── Diary ─────────────────────────────────────────
   Future<void> _loadDiary() async {
-    if (activePet == null) return;
+    if (activePet?.id == null) return;
     _diaryEntries = await _db.getEntriesByPet(activePet!.id!);
   }
 
   Future<DiaryEntry?> getRandomMemory() async {
-    if (activePet == null) return null;
+    if (activePet?.id == null) return null;
     return _db.getRandomEntry(activePet!.id!);
   }
 
@@ -112,20 +118,27 @@ class AppProvider extends ChangeNotifier {
     required String body,
     required List<String> photoUris,
   }) async {
-    if (activePet == null) return;
-    final entry = DiaryEntry(
+    if (activePet?.id == null) return;
+    final allowed = _isPro ? photoUris : photoUris.take(quotaRemaining).toList();
+    await _db.insertEntry(DiaryEntry(
       petId: activePet!.id!,
       date: DateTime.now(),
       mood: mood,
       body: body,
-      photoUris: photoUris,
+      photoUris: allowed,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
-    );
-    await _db.insertEntry(entry);
-    // 写真枠カウント
-    _quotaUsed += photoUris.length;
-    await _saveQuota();
+    ));
+    if (!_isPro && allowed.isNotEmpty) {
+      _quotaUsed = (_quotaUsed + allowed.length).clamp(0, quotaTotal);
+      await _saveQuota();
+    }
+    await _loadDiary();
+    notifyListeners();
+  }
+
+  Future<void> updateDiaryEntry(DiaryEntry entry) async {
+    await _db.updateEntry(entry);
     await _loadDiary();
     notifyListeners();
   }
@@ -136,41 +149,51 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Expense ───────────────────────────────────────
   Future<void> loadExpenses() async {
-    if (activePet == null) return;
+    if (activePet?.id == null) return;
     _expenses = await _db.getExpensesInMonth(activePet!.id!, _expenseYear, _expenseMonth);
     notifyListeners();
   }
 
   Future<void> navigateExpenseMonth(int dir) async {
     final d = DateTime(_expenseYear, _expenseMonth + dir);
-    _expenseYear  = d.year;
+    _expenseYear = d.year;
     _expenseMonth = d.month;
     await loadExpenses();
   }
 
-  Future<void> addExpense({
-    required ExpenseCategory category,
-    required int amount,
-    required String memo,
-  }) async {
-    if (activePet == null) return;
-    final expense = Expense(
+  Future<void> addExpense({required ExpenseCategory category, required int amount, required String memo}) async {
+    if (activePet?.id == null) return;
+    await _db.insertExpense(Expense(
       petId: activePet!.id!,
       date: DateTime.now(),
       category: category,
       amount: amount,
       memo: memo,
       createdAt: DateTime.now(),
-    );
-    await _db.insertExpense(expense);
+    ));
     await loadExpenses();
   }
 
   Future<void> deleteExpense(int id) async {
     await _db.deleteExpense(id);
     await loadExpenses();
+  }
+
+  Future<void> updateExpense(Expense expense) async {
+    await _db.updateExpense(expense);
+    await loadExpenses();
+  }
+
+  Future<List<MonthTotal>> getPast3MonthTotals() async {
+    if (activePet?.id == null) return [];
+    final result = <MonthTotal>[];
+    for (int i = 3; i >= 1; i--) {
+      final d = DateTime(_expenseYear, _expenseMonth - i);
+      final items = await _db.getExpensesInMonth(activePet!.id!, d.year, d.month);
+      result.add(MonthTotal(d.month, items.fold(0, (s, e) => s + e.amount)));
+    }
+    return result;
   }
 
   Map<ExpenseCategory, int> get categoryTotals {
@@ -181,9 +204,8 @@ class AppProvider extends ChangeNotifier {
     return map;
   }
 
-  int get expenseTotal => _expenses.fold(0, (sum, e) => sum + e.amount);
+  int get expenseTotal => _expenses.fold(0, (s, e) => s + e.amount);
 
-  // ─── 写真枠 ─────────────────────────────────────────
   Future<void> applyRewardBonus() async {
     _quotaBonus = 3;
     _rewardWatched = true;
@@ -200,7 +222,6 @@ class AppProvider extends ChangeNotifier {
     if (_rewardWatched) await prefs.setString('reward_date', today);
   }
 
-  // ─── Pro ───────────────────────────────────────────
   Future<void> setIsPro(bool value) async {
     _isPro = value;
     final prefs = await SharedPreferences.getInstance();

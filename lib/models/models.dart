@@ -213,6 +213,14 @@ class Expense {
     required this.createdAt,
   });
 
+  Expense copyWith({ExpenseCategory? category, int? amount, String? memo}) => Expense(
+    id: id, petId: petId, date: date,
+    category: category ?? this.category,
+    amount: amount ?? this.amount,
+    memo: memo ?? this.memo,
+    createdAt: createdAt,
+  );
+
   Map<String, dynamic> toMap() => {
     'id': id,
     'petId': petId,
