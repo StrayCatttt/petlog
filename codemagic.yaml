@@ -3,7 +3,7 @@ workflows:
     name: Android Release APK
     max_build_duration: 60
     environment:
-      flutter: stable
+      flutter: 3.27.4
       java: 17
     scripts:
       - name: Get Flutter packages
@@ -15,7 +15,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - your-email@example.com   # ★ここを自分のメールアドレスに書き換える★
+          - zero.minecraftkouki@gmail.com
         notify:
           success: true
           failure: true
