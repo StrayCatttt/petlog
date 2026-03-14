@@ -1,0 +1,50 @@
+name: petlog
+description: ペットとの日々を、ずっと。
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # DB
+  sqflite: ^2.3.3+1
+  path: ^1.9.0
+
+  # 状態管理
+  provider: ^6.1.2
+  shared_preferences: ^2.3.2
+
+  # 画像
+  image_picker: ^1.1.2
+  cached_network_image: ^3.4.1
+
+  # UI
+  fl_chart: ^0.69.0
+  table_calendar: ^3.1.2
+  intl: ^0.19.0
+
+  # 広告
+  google_mobile_ads: ^5.1.0
+
+  # 課金
+  in_app_purchase: ^3.2.0
+
+  # WorkManager相当（バックグラウンド）
+  workmanager: ^0.5.2
+
+  # アイコン
+  flutter_launcher_icons: ^0.14.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
