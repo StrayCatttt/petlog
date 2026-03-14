@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../repositories/app_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import '../utils/ad_helper.dart';
 
 class AlbumScreen extends StatelessWidget {
   const AlbumScreen({super.key});
