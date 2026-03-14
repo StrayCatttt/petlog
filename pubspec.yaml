@@ -25,19 +25,13 @@ dependencies:
   # UI
   fl_chart: ^0.69.0
   table_calendar: ^3.1.2
-  intl: ^0.19.0
+  intl: ^0.20.0
 
   # 広告
-  google_mobile_ads: ^5.1.0
+  google_mobile_ads: ^5.3.0
 
   # 課金
   in_app_purchase: ^3.2.0
-
-  # WorkManager相当（バックグラウンド）
-  workmanager: ^0.5.2
-
-  # アイコン
-  flutter_launcher_icons: ^0.14.1
 
 dev_dependencies:
   flutter_test:
