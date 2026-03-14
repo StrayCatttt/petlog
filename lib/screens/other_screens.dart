@@ -100,10 +100,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 12),
           ],
 
-          // 通知設定
-          _SettingsGroup(title: '通知設定', children: [
-            SettingsRow(icon: '🔔', title: '通知の詳細設定', onTap: () => _showNotifSettings(context, provider)),
-          ]),
+          // 通知設定は削除（カレンダーのベルアイコンから設定）
 
           const SizedBox(height: 12),
 
@@ -149,21 +146,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
     content: const Text('1. ホーム画面を長押し\n2.「ウィジェット」をタップ\n3. アプリ一覧から「ぺちろぐ」を選択\n4. ウィジェットを長押しして配置\n\n※ Android 12以降対応', style: TextStyle(height: 1.8)),
     actions: [ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
   ));
-  void _showNotifSettings(BuildContext context, AppProvider provider) =>
-    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => _NotifSettingsSheet(settings: provider.notifSettings));
   void _showProDialog(BuildContext context, AppProvider provider) => showDialog(context: context, builder: (ctx) => AlertDialog(
     backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-    title: const Column(children: [Text('✨', style: TextStyle(fontSize: 48)), SizedBox(height: 8), Text('ぺちろぐ PRO', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark))]),
-    content: const Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('PRO機能：', style: TextStyle(fontWeight: FontWeight.bold)), SizedBox(height: 8),
-      Text('✓ 広告なし\n✓ 写真1日30枚\n✓ ペット無制限\n✓ ホーム画面ウィジェット\n✓ データ引継ぎ（機種変更対応）', style: TextStyle(color: AppColors.textMid, height: 1.8)),
-      SizedBox(height: 12),
-      Text('¥380/月（初月無料）', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.caramel, fontSize: 16)),
-      SizedBox(height: 4), Text('※これは試用版です。実際の課金は発生しません。', style: TextStyle(fontSize: 10, color: AppColors.textLight)),
+    title: const Column(children: [Text('✨', style: TextStyle(fontSize: 48)), SizedBox(height: 8), Text('ぺとろぐ PRO', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark))]),
+    content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('PRO機能：', style: TextStyle(fontWeight: FontWeight.bold)), const SizedBox(height: 8),
+      const Text('✓ 広告なし\n✓ 写真1日30枚\n✓ ペット無制限\n✓ ホーム画面ウィジェット\n✓ データ引継ぎ（機種変更対応）', style: TextStyle(color: AppColors.textMid, height: 1.8)),
+      const SizedBox(height: 16),
+      const Text('プランを選んでください：', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+      const SizedBox(height: 8),
+      // 月額プラン
+      OutlinedButton(
+        onPressed: () { Navigator.pop(ctx); provider.setIsPro(true); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✨ PRO（月額）が有効になりました！'), backgroundColor: AppColors.caramel)); },
+        style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 48), side: const BorderSide(color: AppColors.caramel), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        child: const Column(children: [
+          Text('月額プラン', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark)),
+          Text('¥380 / 月（初月無料）', style: TextStyle(color: AppColors.caramel, fontWeight: FontWeight.bold)),
+        ]),
+      ),
+      const SizedBox(height: 8),
+      // 年額プラン
+      ElevatedButton(
+        onPressed: () { Navigator.pop(ctx); provider.setIsPro(true); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✨ PRO（年額）が有効になりました！'), backgroundColor: AppColors.caramel)); },
+        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48), backgroundColor: AppColors.gold, foregroundColor: AppColors.textDark, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        child: const Column(children: [
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Text('年額プラン', style: TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(width: 8),
+            Text('お得！', style: TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.bold)),
+          ]),
+          Text('¥3,800 / 年（月あたり¥316）', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        ]),
+      ),
+      const SizedBox(height: 8),
+      const Text('※これは試用版です。実際の課金は発生しません。', style: TextStyle(fontSize: 10, color: AppColors.textLight)),
     ]),
-    actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('キャンセル', style: TextStyle(color: AppColors.textMid))),
-      ElevatedButton(onPressed: () { Navigator.pop(ctx); provider.setIsPro(true); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✨ PRO機能が有効になりました！'), backgroundColor: AppColors.caramel)); },
-        style: ElevatedButton.styleFrom(backgroundColor: AppColors.gold, foregroundColor: AppColors.textDark), child: const Text('試用する（無料）', style: TextStyle(fontWeight: FontWeight.bold)))],
+    actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('キャンセル', style: TextStyle(color: AppColors.textMid)))],
   ));
 
   void _showImport(BuildContext context, AppProvider provider) => showDialog(context: context, builder: (ctx) => AlertDialog(
@@ -176,89 +194,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ファイルを選択して復元してください')));
       }, child: const Text('ファイルを選ぶ'))],
   ));
-}
-
-// ─── 通知設定シート ───────────────────────────────────
-
-class _NotifSettingsSheet extends StatefulWidget {
-  final NotificationSettings settings;
-  const _NotifSettingsSheet({required this.settings});
-  @override State<_NotifSettingsSheet> createState() => _NotifSettingsSheetState();
-}
-class _NotifSettingsSheetState extends State<_NotifSettingsSheet> {
-  late bool _diaryReminder, _vaccineReminder, _anniversaryNotify;
-  late int _diaryHour, _diaryMinute, _vaccineDays;
-  late String _sound;
-
-  @override void initState() {
-    super.initState();
-    final s = widget.settings;
-    _diaryReminder = s.diaryReminder; _diaryHour = s.diaryHour; _diaryMinute = s.diaryMinute;
-    _vaccineReminder = s.vaccineReminder; _vaccineDays = s.vaccineDaysBefore;
-    _anniversaryNotify = s.anniversaryNotify; _sound = s.notifySound;
-  }
-
-  @override Widget build(BuildContext context) => Container(
-    decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-    padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 40),
-    child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('🔔 通知設定', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark)),
-      const SizedBox(height: 20),
-
-      // 日記リマインダー
-      SwitchListTile(value: _diaryReminder, onChanged: (v) => setState(() => _diaryReminder = v), activeColor: AppColors.caramel,
-        title: const Text('日記のリマインダー', style: TextStyle(fontWeight: FontWeight.w600)), subtitle: const Text('毎日指定した時間に通知'), contentPadding: EdgeInsets.zero),
-      if (_diaryReminder) ...[
-        Row(children: [
-          const Text('通知時刻：', style: TextStyle(fontSize: 13, color: AppColors.textMid)),
-          TextButton(onPressed: () async {
-            final t = await showTimePicker(context: context, initialTime: TimeOfDay(hour: _diaryHour, minute: _diaryMinute));
-            if (t != null) setState(() { _diaryHour = t.hour; _diaryMinute = t.minute; });
-          }, child: Text('${_diaryHour.toString().padLeft(2,'0')}:${_diaryMinute.toString().padLeft(2,'0')}', style: const TextStyle(color: AppColors.caramel, fontWeight: FontWeight.bold, fontSize: 18))),
-        ]),
-        const SizedBox(height: 8),
-      ],
-
-      const Divider(),
-
-      // ワクチン・医療リマインダー
-      SwitchListTile(value: _vaccineReminder, onChanged: (v) => setState(() => _vaccineReminder = v), activeColor: AppColors.caramel,
-        title: const Text('ワクチン・健診リマインダー', style: TextStyle(fontWeight: FontWeight.w600)), subtitle: const Text('予定の前に通知'), contentPadding: EdgeInsets.zero),
-      if (_vaccineReminder) ...[
-        Row(children: [
-          const Text('何日前に通知：', style: TextStyle(fontSize: 13, color: AppColors.textMid)),
-          DropdownButton<int>(value: _vaccineDays, items: [1,3,7,14,30].map((d) => DropdownMenuItem(value: d, child: Text('$d日前'))).toList(), onChanged: (v) => setState(() => _vaccineDays = v!)),
-        ]),
-        const SizedBox(height: 8),
-      ],
-
-      const Divider(),
-
-      // 記念日通知
-      SwitchListTile(value: _anniversaryNotify, onChanged: (v) => setState(() => _anniversaryNotify = v), activeColor: AppColors.caramel,
-        title: const Text('お迎え記念日の通知', style: TextStyle(fontWeight: FontWeight.w600)), contentPadding: EdgeInsets.zero),
-
-      const Divider(),
-
-      // 通知音
-      const Text('通知の方法', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark)),
-      const SizedBox(height: 8),
-      ...['default','vibrate','silent'].map((s) => RadioListTile<String>(
-        value: s, groupValue: _sound, onChanged: (v) => setState(() => _sound = v!),
-        title: Text(s == 'default' ? '🔊 サウンドあり' : s == 'vibrate' ? '📳 バイブのみ' : '🔇 サイレント'),
-        activeColor: AppColors.caramel, contentPadding: EdgeInsets.zero,
-      )),
-
-      const SizedBox(height: 20),
-      PetoButton(label: '✓ 保存する', onPressed: () async {
-        final settings = NotificationSettings(diaryReminder: _diaryReminder, diaryHour: _diaryHour, diaryMinute: _diaryMinute,
-          vaccineReminder: _vaccineReminder, vaccineDaysBefore: _vaccineDays,
-          anniversaryNotify: _anniversaryNotify, notifySound: _sound);
-        await context.read<AppProvider>().saveNotifSettings(settings);
-        if (mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('通知設定を保存しました'), backgroundColor: AppColors.caramel)); }
-      }),
-    ])),
-  );
 }
 
 // ─── ペット追加シート ──────────────────────────────────

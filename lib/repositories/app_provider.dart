@@ -55,9 +55,6 @@ class AppProvider extends ChangeNotifier {
     } else { _quotaUsed=0; _quotaBonus=0; _rewardWatched=false; }
     // 通知設定
     _notifSettings=NotificationSettings(
-      diaryReminder:p.getBool('notif_diary')??true,
-      diaryHour:p.getInt('notif_diary_hour')??20,
-      diaryMinute:p.getInt('notif_diary_minute')??0,
       vaccineReminder:p.getBool('notif_vaccine')??true,
       vaccineDaysBefore:p.getInt('notif_vaccine_days')??7,
       anniversaryNotify:p.getBool('notif_anniversary')??true,
@@ -68,9 +65,6 @@ class AppProvider extends ChangeNotifier {
   Future<void> saveNotifSettings(NotificationSettings s) async {
     _notifSettings=s;
     final p=await SharedPreferences.getInstance();
-    await p.setBool('notif_diary',s.diaryReminder);
-    await p.setInt('notif_diary_hour',s.diaryHour);
-    await p.setInt('notif_diary_minute',s.diaryMinute);
     await p.setBool('notif_vaccine',s.vaccineReminder);
     await p.setInt('notif_vaccine_days',s.vaccineDaysBefore);
     await p.setBool('notif_anniversary',s.anniversaryNotify);

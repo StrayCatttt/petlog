@@ -16,7 +16,7 @@ class DiaryScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       floatingActionButton: FloatingActionButton(
-        onPressed: () => showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => const _AddDiarySheet()),
+        onPressed: () => showDialog(context: context, builder: (_) => const _AddDiaryDialog()),
         backgroundColor: AppColors.caramel,
         child: const Icon(Icons.add, color: Colors.white, size: 28),
       ),
@@ -55,87 +55,161 @@ class _DiaryCard extends StatelessWidget {
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(entry.mood.emoji, style: const TextStyle(fontSize: 18)),
             const SizedBox(height: 2),
-            Text(entry.body.isEmpty ? '（本文なし）' : entry.body, style: const TextStyle(fontSize: 12, color: AppColors.textMid), maxLines: 2, overflow: TextOverflow.ellipsis),
+            Text(entry.body.isEmpty ? '（本文なし）' : entry.body,
+                style: const TextStyle(fontSize: 12, color: AppColors.textMid), maxLines: 2, overflow: TextOverflow.ellipsis),
           ])),
           if (firstPhoto != null) ...[
             const SizedBox(width: 12),
-            ClipRRect(borderRadius: BorderRadius.circular(10), child: Stack(children: [
-              isVideo
+            ClipRRect(borderRadius: BorderRadius.circular(10),
+              child: isVideo
                   ? Container(width: 56, height: 56, color: Colors.black87, child: const Center(child: Icon(Icons.play_circle, color: Colors.white, size: 28)))
-                  : Image.file(File(firstPhoto), width: 56, height: 56, fit: BoxFit.cover, errorBuilder: (_,__,___) => const SizedBox(width: 56, height: 56)),
-            ])),
+                  : Image.file(File(firstPhoto), width: 56, height: 56, fit: BoxFit.cover, errorBuilder: (_,__,___) => const SizedBox(width: 56, height: 56))),
           ],
         ])));
   }
 
   void _showOptions(BuildContext context) {
-    showModalBottomSheet(context: context, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      ListTile(leading: const Icon(Icons.edit, color: AppColors.caramel), title: const Text('編集'), onTap: () { Navigator.pop(ctx); showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => _EditDiarySheet(entry: entry)); }),
-      ListTile(leading: const Icon(Icons.delete, color: Colors.red), title: const Text('削除', style: TextStyle(color: Colors.red)), onTap: () { Navigator.pop(ctx); showDialog(context: context, builder: (d) => AlertDialog(title: const Text('日記を削除しますか？'), actions: [TextButton(onPressed: () => Navigator.pop(d), child: const Text('キャンセル')), ElevatedButton(onPressed: () { Navigator.pop(d); context.read<AppProvider>().deleteEntry(entry.id!); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text('削除'))])); }),
-    ])));
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(DateFormat('M月d日の記録').format(entry.date)),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        ListTile(leading: const Icon(Icons.edit, color: AppColors.caramel), title: const Text('編集'), onTap: () { Navigator.pop(ctx); showDialog(context: context, builder: (_) => _EditDiaryDialog(entry: entry)); }),
+        ListTile(leading: const Icon(Icons.delete, color: Colors.red), title: const Text('削除', style: TextStyle(color: Colors.red)), onTap: () { Navigator.pop(ctx); showDialog(context: context, builder: (d) => AlertDialog(title: const Text('削除しますか？'), actions: [TextButton(onPressed: () => Navigator.pop(d), child: const Text('キャンセル')), ElevatedButton(onPressed: () { Navigator.pop(d); context.read<AppProvider>().deleteEntry(entry.id!); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text('削除'))])); }),
+      ]),
+    ));
   }
 }
 
-// ─── 追加シート ───────────────────────────────────────
+// ─── 日記追加 Dialog（画面中央） ─────────────────────────
 
-class _AddDiarySheet extends StatefulWidget {
-  const _AddDiarySheet();
-  @override State<_AddDiarySheet> createState() => _AddDiarySheetState();
+class _AddDiaryDialog extends StatefulWidget {
+  const _AddDiaryDialog();
+  @override State<_AddDiaryDialog> createState() => _AddDiaryDialogState();
 }
-class _AddDiarySheetState extends State<_AddDiarySheet> {
+
+class _AddDiaryDialogState extends State<_AddDiaryDialog> {
   DiaryMood _mood = DiaryMood.happy;
   final _bodyCtrl = TextEditingController();
-  final List<String> _media = [];
+  // ✅ 実際にファイルが確認できたメディアのみ保持
+  final List<String> _confirmedMedia = [];
   bool _picking = false;
 
-  Future<void> _pick(ImageSource source, {bool video = false}) async {
+  // ✅ 写真・動画を選択してファイル存在確認してから追加
+  Future<void> _pickMedia({bool video = false}) async {
     if (_picking) return;
     setState(() => _picking = true);
     try {
       final picker = ImagePicker();
+      final List<String> newPaths = [];
       if (video) {
-        final f = await picker.pickVideo(source: source);
-        if (f != null) setState(() => _media.add(f.path));
+        final f = await picker.pickVideo(source: ImageSource.gallery);
+        if (f != null && await File(f.path).exists()) newPaths.add(f.path);
       } else {
         final files = await picker.pickMultiImage();
-        if (files.isNotEmpty) setState(() => _media.addAll(files.map((f) => f.path)));
+        for (final f in files) {
+          if (await File(f.path).exists()) newPaths.add(f.path);
+        }
       }
-    } catch(e) { debugPrint('pick error: $e'); }
-    finally { if (mounted) setState(() => _picking = false); }
+      if (newPaths.isNotEmpty) {
+        setState(() => _confirmedMedia.addAll(newPaths));
+      }
+    } catch (e) {
+      debugPrint('pick error: $e');
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
   }
 
   void _showPickOptions() {
-    showModalBottomSheet(context: context, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      ListTile(leading: const Icon(Icons.photo_library, color: AppColors.caramel), title: const Text('写真をギャラリーから選ぶ'), onTap: () { Navigator.pop(ctx); _pick(ImageSource.gallery); }),
-      ListTile(leading: const Icon(Icons.videocam, color: AppColors.caramel), title: const Text('動画をギャラリーから選ぶ'), onTap: () { Navigator.pop(ctx); _pick(ImageSource.gallery, video: true); }),
-      ListTile(leading: const Icon(Icons.camera_alt, color: AppColors.caramel), title: const Text('カメラで撮影'), onTap: () { Navigator.pop(ctx); _pick(ImageSource.camera); }),
-    ])));
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('メディアを追加'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        ListTile(leading: const Icon(Icons.photo_library, color: AppColors.caramel), title: const Text('写真を選ぶ'), onTap: () { Navigator.pop(ctx); _pickMedia(); }),
+        ListTile(leading: const Icon(Icons.videocam, color: AppColors.caramel), title: const Text('動画を選ぶ'), onTap: () { Navigator.pop(ctx); _pickMedia(video: true); }),
+        ListTile(leading: const Icon(Icons.camera_alt, color: AppColors.caramel), title: const Text('カメラで撮影'), onTap: () async { Navigator.pop(ctx); setState(() => _picking = true); try { final f = await ImagePicker().pickImage(source: ImageSource.camera); if (f != null && await File(f.path).exists()) setState(() => _confirmedMedia.add(f.path)); } finally { if (mounted) setState(() => _picking = false); } }),
+      ]),
+    ));
   }
 
   @override Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
+    // ✅ 枠はUI表示のみ。実際の消費は保存時にのみ行う
     final limit = provider.isPro ? 30 : provider.quotaRemaining;
-    return _DiaryFormContent(
-      title: '📝 新しい記録を追加', mood: _mood, onMoodChanged: (m) => setState(() => _mood = m),
-      bodyCtrl: _bodyCtrl, media: _media, limit: limit,
-      onPickMedia: _showPickOptions,
-      onRemoveMedia: (i) => setState(() => _media.removeAt(i)),
-      onSave: () async {
-        await provider.addDiaryEntry(mood: _mood, body: _bodyCtrl.text, photoUris: _media);
-        if (mounted) Navigator.pop(context);
-      },
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        const Text('📝 新しい記録を追加', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+        const SizedBox(height: 16),
+        // 気分タグ
+        const Text('気分タグ', style: TextStyle(fontSize: 12, color: AppColors.textLight)), const SizedBox(height: 6),
+        SizedBox(height: 44, child: ListView(scrollDirection: Axis.horizontal, children: DiaryMood.values.map((m) => GestureDetector(
+          onTap: () => setState(() => _mood = m),
+          child: Container(margin: const EdgeInsets.only(right: 6), padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(shape: BoxShape.circle, color: _mood == m ? AppColors.caramelPale : Colors.transparent, border: Border.all(color: _mood == m ? AppColors.caramel : Colors.transparent, width: 1.5)),
+            child: Text(m.emoji, style: const TextStyle(fontSize: 26))),
+        )).toList())),
+        const SizedBox(height: 12),
+        // 本文
+        const Text('本文', style: TextStyle(fontSize: 12, color: AppColors.textLight)), const SizedBox(height: 4),
+        TextField(controller: _bodyCtrl, maxLines: 3, decoration: const InputDecoration(hintText: '今日の様子を書いてみよう…', hintStyle: TextStyle(color: AppColors.textLight))),
+        const SizedBox(height: 12),
+        // 写真・動画
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text('写真・動画（${_confirmedMedia.length}/$limit枚）', style: const TextStyle(fontSize: 12, color: AppColors.textLight)),
+          if (_picking) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.caramel)),
+        ]),
+        const SizedBox(height: 6),
+        if (_confirmedMedia.isNotEmpty) ...[
+          SizedBox(height: 80, child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: _confirmedMedia.length, itemBuilder: (ctx, i) {
+            final isVideo = _confirmedMedia[i].endsWith('.mp4') || _confirmedMedia[i].endsWith('.mov');
+            return Stack(children: [
+              Container(width: 80, height: 80, margin: const EdgeInsets.only(right: 8),
+                child: ClipRRect(borderRadius: BorderRadius.circular(10), child: isVideo
+                    ? Container(color: Colors.black87, child: const Center(child: Icon(Icons.play_circle, color: Colors.white, size: 32)))
+                    : Image.file(File(_confirmedMedia[i]), fit: BoxFit.cover))),
+              Positioned(top: 2, right: 10, child: GestureDetector(onTap: () => setState(() => _confirmedMedia.removeAt(i)),
+                child: Container(width: 18, height: 18, decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white, size: 12)))),
+            ]);
+          })),
+          const SizedBox(height: 8),
+        ],
+        if (_confirmedMedia.length < limit && !_picking)
+          OutlinedButton.icon(
+            onPressed: _showPickOptions,
+            icon: const Icon(Icons.perm_media, color: AppColors.caramelLight, size: 18),
+            label: const Text('写真・動画を追加', style: TextStyle(color: AppColors.caramelLight, fontSize: 13, fontWeight: FontWeight.bold)),
+            style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 44), side: const BorderSide(color: AppColors.caramelLight, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+          ),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル', style: TextStyle(color: AppColors.textMid)))),
+          const SizedBox(width: 8),
+          Expanded(child: ElevatedButton(
+            // ✅ 本文またはメディアがある場合に保存可能
+            onPressed: () async {
+              await provider.addDiaryEntry(mood: _mood, body: _bodyCtrl.text, photoUris: _confirmedMedia);
+              if (mounted) Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.caramel),
+            child: const Text('✓ 保存', style: TextStyle(fontWeight: FontWeight.bold)),
+          )),
+        ]),
+      ]))),
     );
   }
 }
 
-// ─── 編集シート ───────────────────────────────────────
+// ─── 日記編集 Dialog ─────────────────────────────────────
 
-class _EditDiarySheet extends StatefulWidget {
+class _EditDiaryDialog extends StatefulWidget {
   final DiaryEntry entry;
-  const _EditDiarySheet({required this.entry});
-  @override State<_EditDiarySheet> createState() => _EditDiarySheetState();
+  const _EditDiaryDialog({required this.entry});
+  @override State<_EditDiaryDialog> createState() => _EditDiaryDialogState();
 }
-class _EditDiarySheetState extends State<_EditDiarySheet> {
+class _EditDiaryDialogState extends State<_EditDiaryDialog> {
   late DiaryMood _mood;
   late TextEditingController _bodyCtrl;
   late List<String> _media;
@@ -148,87 +222,70 @@ class _EditDiarySheetState extends State<_EditDiarySheet> {
     _media = List.from(widget.entry.photoUris);
   }
 
-  Future<void> _pick(ImageSource source, {bool video = false}) async {
+  Future<void> _pickMedia({bool video = false}) async {
     if (_picking) return;
     setState(() => _picking = true);
     try {
       final picker = ImagePicker();
-      if (video) { final f = await picker.pickVideo(source: source); if (f != null) setState(() => _media.add(f.path)); }
-      else { final files = await picker.pickMultiImage(); if (files.isNotEmpty) setState(() => _media.addAll(files.map((f) => f.path))); }
+      if (video) {
+        final f = await picker.pickVideo(source: ImageSource.gallery);
+        if (f != null && await File(f.path).exists()) setState(() => _media.add(f.path));
+      } else {
+        final files = await picker.pickMultiImage();
+        for (final f in files) {
+          if (await File(f.path).exists()) setState(() => _media.add(f.path));
+        }
+      }
     } finally { if (mounted) setState(() => _picking = false); }
   }
 
   void _showPickOptions() {
-    showModalBottomSheet(context: context, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      ListTile(leading: const Icon(Icons.photo_library, color: AppColors.caramel), title: const Text('写真をギャラリーから選ぶ'), onTap: () { Navigator.pop(ctx); _pick(ImageSource.gallery); }),
-      ListTile(leading: const Icon(Icons.videocam, color: AppColors.caramel), title: const Text('動画をギャラリーから選ぶ'), onTap: () { Navigator.pop(ctx); _pick(ImageSource.gallery, video: true); }),
-      ListTile(leading: const Icon(Icons.camera_alt, color: AppColors.caramel), title: const Text('カメラで撮影'), onTap: () { Navigator.pop(ctx); _pick(ImageSource.camera); }),
-    ])));
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('メディアを追加'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        ListTile(leading: const Icon(Icons.photo_library, color: AppColors.caramel), title: const Text('写真を選ぶ'), onTap: () { Navigator.pop(ctx); _pickMedia(); }),
+        ListTile(leading: const Icon(Icons.videocam, color: AppColors.caramel), title: const Text('動画を選ぶ'), onTap: () { Navigator.pop(ctx); _pickMedia(video: true); }),
+      ]),
+    ));
   }
 
-  @override Widget build(BuildContext context) => _DiaryFormContent(
-    title: '✏️ 日記を編集', mood: _mood, onMoodChanged: (m) => setState(() => _mood = m),
-    bodyCtrl: _bodyCtrl, media: _media, limit: 30,
-    onPickMedia: _showPickOptions,
-    onRemoveMedia: (i) => setState(() => _media.removeAt(i)),
-    onSave: () async {
-      final updated = widget.entry.copyWith(mood: _mood, body: _bodyCtrl.text, photoUris: _media);
-      await context.read<AppProvider>().updateDiaryEntry(updated);
-      if (mounted) Navigator.pop(context);
-    },
-  );
-}
-
-// ─── 共通フォーム ─────────────────────────────────────
-
-class _DiaryFormContent extends StatelessWidget {
-  final String title; final DiaryMood mood; final ValueChanged<DiaryMood> onMoodChanged;
-  final TextEditingController bodyCtrl; final List<String> media; final int limit;
-  final VoidCallback onPickMedia; final ValueChanged<int> onRemoveMedia; final VoidCallback onSave;
-  const _DiaryFormContent({required this.title, required this.mood, required this.onMoodChanged,
-    required this.bodyCtrl, required this.media, required this.limit,
-    required this.onPickMedia, required this.onRemoveMedia, required this.onSave});
-  bool _isVideo(String u) => u.endsWith('.mp4') || u.endsWith('.mov') || u.endsWith('.avi');
-
-  @override Widget build(BuildContext context) => Container(
-    decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-    padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 40),
-    child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark)),
-      const SizedBox(height: 20),
-      const Text('気分タグ', style: TextStyle(fontSize: 12, color: AppColors.textLight)), const SizedBox(height: 8),
-      SizedBox(height: 48, child: ListView(scrollDirection: Axis.horizontal, children: DiaryMood.values.map((m) => GestureDetector(
-        onTap: () => onMoodChanged(m),
-        child: Container(margin: const EdgeInsets.only(right: 8), padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(shape: BoxShape.circle, color: mood == m ? AppColors.caramelPale : Colors.transparent, border: Border.all(color: mood == m ? AppColors.caramel : Colors.transparent, width: 1.5)),
-          child: Text(m.emoji, style: const TextStyle(fontSize: 28))),
+  @override Widget build(BuildContext context) => Dialog(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+    child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+      const Text('✏️ 日記を編集', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+      const SizedBox(height: 14),
+      SizedBox(height: 44, child: ListView(scrollDirection: Axis.horizontal, children: DiaryMood.values.map((m) => GestureDetector(onTap: () => setState(() => _mood = m),
+        child: Container(margin: const EdgeInsets.only(right: 6), padding: const EdgeInsets.all(5), decoration: BoxDecoration(shape: BoxShape.circle, color: _mood == m ? AppColors.caramelPale : Colors.transparent, border: Border.all(color: _mood == m ? AppColors.caramel : Colors.transparent, width: 1.5)), child: Text(m.emoji, style: const TextStyle(fontSize: 26))),
       )).toList())),
-      const SizedBox(height: 16),
-      const Text('本文', style: TextStyle(fontSize: 12, color: AppColors.textLight)), const SizedBox(height: 6),
-      TextField(controller: bodyCtrl, maxLines: 4, decoration: const InputDecoration(hintText: '今日の様子を書いてみよう…', hintStyle: TextStyle(color: AppColors.textLight))),
-      const SizedBox(height: 16),
-      Text('写真・動画（${media.length} / ${limit}枚）', style: const TextStyle(fontSize: 12, color: AppColors.textLight)),
-      const SizedBox(height: 6),
-      if (media.isNotEmpty) ...[
-        SizedBox(height: 90, child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: media.length, itemBuilder: (ctx, i) => Stack(children: [
-          Container(width: 84, height: 84, margin: const EdgeInsets.only(right: 8),
-            child: ClipRRect(borderRadius: BorderRadius.circular(10), child: _isVideo(media[i])
-                ? Container(color: Colors.black87, child: const Center(child: Icon(Icons.play_circle, color: Colors.white, size: 36)))
-                : Image.file(File(media[i]), fit: BoxFit.cover, errorBuilder: (_,__,___) => Container(color: AppColors.caramelPale, child: const Icon(Icons.broken_image))))),
-          Positioned(top: 2, right: 10, child: GestureDetector(onTap: () => onRemoveMedia(i),
-            child: Container(width: 20, height: 20, decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white, size: 14)))),
-        ]))),
+      const SizedBox(height: 12),
+      TextField(controller: _bodyCtrl, maxLines: 3, decoration: const InputDecoration(hintText: '本文', hintStyle: TextStyle(color: AppColors.textLight))),
+      const SizedBox(height: 12),
+      if (_media.isNotEmpty) ...[
+        SizedBox(height: 80, child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: _media.length, itemBuilder: (ctx, i) {
+          final isVideo = _media[i].endsWith('.mp4') || _media[i].endsWith('.mov');
+          return Stack(children: [
+            Container(width: 80, height: 80, margin: const EdgeInsets.only(right: 8), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: isVideo ? Container(color: Colors.black87, child: const Center(child: Icon(Icons.play_circle, color: Colors.white, size: 32))) : Image.file(File(_media[i]), fit: BoxFit.cover))),
+            Positioned(top: 2, right: 10, child: GestureDetector(onTap: () => setState(() => _media.removeAt(i)), child: Container(width: 18, height: 18, decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white, size: 12)))),
+          ]);
+        })),
         const SizedBox(height: 8),
       ],
-      if (media.length < limit)
-        OutlinedButton.icon(
-          onPressed: onPickMedia,
-          icon: const Icon(Icons.perm_media, color: AppColors.caramelLight),
-          label: const Text('📷 写真・動画を追加', style: TextStyle(color: AppColors.caramelLight, fontWeight: FontWeight.bold)),
-          style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 52), side: const BorderSide(color: AppColors.caramelLight, width: 2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-        ),
-      const SizedBox(height: 20),
-      PetoButton(label: '✓ 保存する', onPressed: onSave),
-    ])),
+      OutlinedButton.icon(onPressed: _showPickOptions, icon: const Icon(Icons.perm_media, color: AppColors.caramelLight, size: 18), label: const Text('写真・動画を追加', style: TextStyle(color: AppColors.caramelLight, fontSize: 13)), style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 44), side: const BorderSide(color: AppColors.caramelLight, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)))),
+      const SizedBox(height: 16),
+      Row(children: [
+        Expanded(child: TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル', style: TextStyle(color: AppColors.textMid)))),
+        const SizedBox(width: 8),
+        Expanded(child: ElevatedButton(
+          onPressed: () async {
+            await context.read<AppProvider>().updateDiaryEntry(widget.entry.copyWith(mood: _mood, body: _bodyCtrl.text, photoUris: _media));
+            if (mounted) Navigator.pop(context);
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.caramel),
+          child: const Text('✓ 保存', style: TextStyle(fontWeight: FontWeight.bold)),
+        )),
+      ]),
+    ]))),
   );
 }

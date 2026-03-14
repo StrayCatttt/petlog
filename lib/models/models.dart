@@ -94,14 +94,13 @@ class Expense {
     amount:m['amount'],memo:m['memo']??'',createdAt:DateTime.fromMillisecondsSinceEpoch(m['createdAt']));
 }
 
-// 通知設定
+// 通知設定（日記リマインダーは不要なので削除）
 class NotificationSettings {
-  final bool diaryReminder;
-  final int diaryHour, diaryMinute;
   final bool vaccineReminder;
   final int vaccineDaysBefore;
   final bool anniversaryNotify;
-  final String notifySound; // 'default','silent','vibrate'
-  const NotificationSettings({this.diaryReminder=true,this.diaryHour=20,this.diaryMinute=0,
-    this.vaccineReminder=true,this.vaccineDaysBefore=7,this.anniversaryNotify=true,this.notifySound='default'});
+  final String notifySound; // 'default','vibrate','silent'
+  const NotificationSettings({
+    this.vaccineReminder=true, this.vaccineDaysBefore=7,
+    this.anniversaryNotify=true, this.notifySound='default'});
 }
