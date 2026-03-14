@@ -89,11 +89,11 @@ class _HomeScreenState extends State<HomeScreen> {
           height: 76,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: provider.pets.length + 1,
+            itemCount: provider.activePets.length + (provider.isPro || provider.activePets.isEmpty ? 1 : 0),
             separatorBuilder: (_, __) => const SizedBox(width: 12),
             itemBuilder: (ctx, i) {
-              if (i == provider.pets.length) return _buildAddPetButton();
-              final pet = provider.pets[i];
+              if (i == provider.activePets.length) return _buildAddPetButton();
+              final pet = provider.activePets[i];
               return _PetAvatar(pet: pet, isActive: i == provider.activePetIndex, onTap: () => provider.setActivePet(i));
             },
           ),

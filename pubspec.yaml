@@ -20,8 +20,8 @@ dependencies:
 
   # 画像
   image_picker: ^1.1.2
-  image_cropper: ^5.0.1
   cached_network_image: ^3.4.1
+  permission_handler: ^11.3.1
 
   # UI
   fl_chart: ^0.69.0
