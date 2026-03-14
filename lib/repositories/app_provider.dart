@@ -9,6 +9,7 @@ class AppProvider extends ChangeNotifier {
   // ─── State ─────────────────────────────────────────
   List<Pet> _pets = [];
   int _activePetIndex = 0;
+  int get activePetIndex => _activePetIndex;
   List<DiaryEntry> _diaryEntries = [];
   List<Expense> _expenses = [];
   int _expenseYear  = DateTime.now().year;

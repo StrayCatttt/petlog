@@ -133,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemBuilder: (ctx, i) {
                   if (i == provider.pets.length) return _buildAddPetButton();
                   final pet = provider.pets[i];
-                  final isActive = i == provider._activePetIndex;
+                  final isActive = i == provider.activePetIndex;
                   return _PetAvatar(pet: pet, isActive: isActive, onTap: () => provider.setActivePet(i));
                 },
               ),
