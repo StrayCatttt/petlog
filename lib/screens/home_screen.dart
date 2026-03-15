@@ -296,7 +296,10 @@ class _DayDialog extends StatelessWidget {
           : SizedBox(width: double.maxFinite, child: ListView(shrinkWrap: true, children: schedules.map((s) => ListTile(
               leading: const Text('📌', style: TextStyle(fontSize: 20)),
               title: Text(s.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              subtitle: s.note != null ? Text(s.note!, style: const TextStyle(fontSize: 11)) : null,
+              subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('🕐 ${s.dateTime.hour.toString().padLeft(2,'0')}:${s.dateTime.minute.toString().padLeft(2,'0')}  ${s.notifyLabel}', style: const TextStyle(fontSize: 11, color: AppColors.caramel)),
+                if (s.note != null) Text(s.note!, style: const TextStyle(fontSize: 11)),
+              ]),
               trailing: IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () { Navigator.pop(context); provider.deleteSchedule(s.id!); }),
               dense: true,
             )).toList())),
@@ -305,7 +308,7 @@ class _DayDialog extends StatelessWidget {
   }
 }
 
-// ✅ 予定追加 → Dialog（画面中央）
+// ✅ 予定追加 → Dialog（時間必須・通知タイミング選択）
 class _AddScheduleDialog extends StatefulWidget {
   final DateTime date;
   const _AddScheduleDialog({required this.date});
@@ -314,27 +317,59 @@ class _AddScheduleDialog extends StatefulWidget {
 class _AddScheduleDialogState extends State<_AddScheduleDialog> {
   final _titleCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
+  TimeOfDay _time = TimeOfDay.now();
   bool _notify = true;
+  int _notifyMinutes = 30; // デフォルト30分前
+
   @override Widget build(BuildContext context) => AlertDialog(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-    title: Text('📌 ${DateFormat('M月d日').format(widget.date)}の予定', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-    content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+    title: Text('📌 ${DateFormat("M月d日").format(widget.date)}の予定', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+    content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
       TextField(controller: _titleCtrl, decoration: const InputDecoration(labelText: 'タイトル', hintText: '例：ワクチン接種', hintStyle: TextStyle(color: AppColors.textLight)), onChanged: (_) => setState(() {})),
-      const SizedBox(height: 10),
-      TextField(controller: _noteCtrl, decoration: const InputDecoration(labelText: 'メモ（任意）', hintText: '例：かかりつけ医 14:00〜', hintStyle: TextStyle(color: AppColors.textLight))),
+      const SizedBox(height: 12),
+      // ✅ 時間選択（必須）
+      Row(children: [
+        const Text('時間（必須）：', style: TextStyle(fontSize: 13, color: AppColors.textMid)),
+        TextButton(
+          onPressed: () async {
+            final t = await showTimePicker(context: context, initialTime: _time);
+            if (t != null) setState(() => _time = t);
+          },
+          child: Text(
+            '${_time.hour.toString().padLeft(2,"0")}:${_time.minute.toString().padLeft(2,"0")}',
+            style: const TextStyle(color: AppColors.caramel, fontWeight: FontWeight.bold, fontSize: 18)),
+        ),
+      ]),
+      const SizedBox(height: 8),
+      TextField(controller: _noteCtrl, decoration: const InputDecoration(labelText: 'メモ（任意）', hintText: '例：かかりつけ医', hintStyle: TextStyle(color: AppColors.textLight))),
       const SizedBox(height: 10),
       SwitchListTile(value: _notify, onChanged: (v) => setState(() => _notify = v),
         title: const Text('通知する', style: TextStyle(fontSize: 13)), activeColor: AppColors.caramel, contentPadding: EdgeInsets.zero, dense: true),
+      if (_notify) ...[
+        const Text('通知タイミング', style: TextStyle(fontSize: 11, color: AppColors.textLight)),
+        Wrap(spacing: 6, children: [
+          for (final entry in {0:"当日",10:"10分前",30:"30分前",60:"1時間前",360:"6時間前",720:"12時間前"}.entries)
+            ChoiceChip(
+              label: Text(entry.value, style: const TextStyle(fontSize: 11)),
+              selected: _notifyMinutes == entry.key,
+              onSelected: (_) => setState(() => _notifyMinutes = entry.key),
+              selectedColor: AppColors.caramel,
+              labelStyle: TextStyle(color: _notifyMinutes == entry.key ? Colors.white : AppColors.textMid),
+            ),
+        ]),
+      ],
     ])),
     actions: [
       TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル', style: TextStyle(color: AppColors.textMid))),
       ElevatedButton(
         onPressed: _titleCtrl.text.trim().isEmpty ? null : () async {
+          final dt = DateTime(widget.date.year, widget.date.month, widget.date.day, _time.hour, _time.minute);
           await context.read<AppProvider>().addSchedule(PetSchedule(
             petId: context.read<AppProvider>().activePet?.id,
-            date: widget.date, title: _titleCtrl.text.trim(),
+            dateTime: dt, title: _titleCtrl.text.trim(),
             note: _noteCtrl.text.isEmpty ? null : _noteCtrl.text,
-            notifyEnabled: _notify, createdAt: DateTime.now()));
+            notifyEnabled: _notify, notifyMinutesBefore: _notifyMinutes,
+            createdAt: DateTime.now()));
           if (mounted) Navigator.pop(context);
         },
         child: const Text('追加'),
@@ -354,18 +389,35 @@ class _NotifSettingsDialogState extends State<_NotifSettingsDialog> {
   late int _vaccineDays;
   late String _sound;
 
+  late int _defaultNotifyMinutes;
+
   @override void initState() {
     super.initState();
     final s = widget.settings;
     _vaccineReminder = s.vaccineReminder; _vaccineDays = s.vaccineDaysBefore;
     _anniversaryNotify = s.anniversaryNotify; _sound = s.notifySound;
+    _defaultNotifyMinutes = s.defaultNotifyMinutesBefore;
   }
 
   @override Widget build(BuildContext context) => AlertDialog(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     title: const Text('🔔 通知設定', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-    content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      // ✅ 「日記リマインダー」は削除 - 不要
+    content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // ✅ 全般：デフォルト通知タイミング
+      const Text('全般', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+      const SizedBox(height: 4),
+      const Text('予定のデフォルト通知タイミング', style: TextStyle(fontSize: 11, color: AppColors.textLight)),
+      Wrap(spacing: 6, children: [
+        for (final entry in {0:"当日",10:"10分前",30:"30分前",60:"1時間前",360:"6時間前",720:"12時間前"}.entries)
+          ChoiceChip(
+            label: Text(entry.value, style: const TextStyle(fontSize: 11)),
+            selected: _defaultNotifyMinutes == entry.key,
+            onSelected: (_) => setState(() => _defaultNotifyMinutes = entry.key),
+            selectedColor: AppColors.caramel,
+            labelStyle: TextStyle(color: _defaultNotifyMinutes == entry.key ? Colors.white : AppColors.textMid),
+          ),
+      ]),
+      const Divider(),
       SwitchListTile(value: _vaccineReminder, onChanged: (v) => setState(() => _vaccineReminder = v), activeColor: AppColors.caramel,
         title: const Text('ワクチン・健診リマインダー', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
         subtitle: const Text('予定の前に通知', style: TextStyle(fontSize: 11)), contentPadding: EdgeInsets.zero, dense: true),
@@ -378,9 +430,9 @@ class _NotifSettingsDialogState extends State<_NotifSettingsDialog> {
         title: const Text('お迎え記念日の通知', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), contentPadding: EdgeInsets.zero, dense: true),
       const Divider(),
       const Text('通知の方法', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-      ...['default','vibrate','silent'].map((s) => RadioListTile<String>(
+      ...["default","vibrate","silent"].map((s) => RadioListTile<String>(
         value: s, groupValue: _sound, onChanged: (v) => setState(() => _sound = v!),
-        title: Text(s == 'default' ? '🔊 サウンドあり' : s == 'vibrate' ? '📳 バイブのみ' : '🔇 サイレント', style: const TextStyle(fontSize: 12)),
+        title: Text(s == "default" ? '🔊 サウンドあり' : s == "vibrate" ? '📳 バイブのみ' : '🔇 サイレント', style: const TextStyle(fontSize: 12)),
         activeColor: AppColors.caramel, contentPadding: EdgeInsets.zero, dense: true,
       )),
     ])),
@@ -389,7 +441,8 @@ class _NotifSettingsDialogState extends State<_NotifSettingsDialog> {
       ElevatedButton(onPressed: () async {
         final settings = NotificationSettings(
           vaccineReminder: _vaccineReminder, vaccineDaysBefore: _vaccineDays,
-          anniversaryNotify: _anniversaryNotify, notifySound: _sound);
+          anniversaryNotify: _anniversaryNotify, notifySound: _sound,
+          defaultNotifyMinutesBefore: _defaultNotifyMinutes);
         await context.read<AppProvider>().saveNotifSettings(settings);
         if (mounted) Navigator.pop(context);
       }, child: const Text('保存')),

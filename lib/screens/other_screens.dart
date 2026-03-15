@@ -107,9 +107,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // データ管理（Pro: 引継ぎ）
           _SettingsGroup(title: 'データ管理', children: [
             if (provider.isPro) ...[
-              SettingsRow(icon: '📤', title: 'データをエクスポート', subtitle: '機種変更・バックアップ用', onTap: () async { await provider.exportData(); }),
+              SettingsRow(
+                icon: '📤',
+                title: 'このスマホからデータを書き出す',
+                subtitle: '機種変更・バックアップ用\nファイルを保存・共有できます',
+                onTap: () async {
+                  await provider.exportData();
+                }),
               const Divider(height: 1, indent: 52),
-              SettingsRow(icon: '📥', title: 'データをインポート', subtitle: 'JSONファイルから復元', onTap: () => _showImport(context, provider)),
+              SettingsRow(
+                icon: '📥',
+                title: '新しいスマホにデータを引き継ぐ',
+                subtitle: '書き出したファイルを選んで復元',
+                onTap: () => _showImportGuide(context, provider)),
               const Divider(height: 1, indent: 52),
             ],
             const SettingsRow(icon: '📋', title: 'アプリ情報', trailingText: 'v1.0.0'),
@@ -184,15 +194,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('キャンセル', style: TextStyle(color: AppColors.textMid)))],
   ));
 
-  void _showImport(BuildContext context, AppProvider provider) => showDialog(context: context, builder: (ctx) => AlertDialog(
-    title: const Text('📥 データをインポート'),
-    content: const Text('エクスポートしたJSONファイルの内容を貼り付けてください。\n\n⚠️ 現在のデータはすべて上書きされます。'),
-    actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('キャンセル')),
+  void _showImportGuide(BuildContext context, AppProvider provider) => showDialog(context: context, builder: (ctx) => AlertDialog(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    title: const Text('📥 データを引き継ぐ', style: TextStyle(fontWeight: FontWeight.bold)),
+    content: const SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('【手順】', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark)),
+      SizedBox(height: 8),
+      Text('① 古いスマホで\n「このスマホからデータを書き出す」をタップ', style: TextStyle(fontSize: 13, color: AppColors.textMid, height: 1.6)),
+      SizedBox(height: 6),
+      Text('② 表示されたファイルを\nGoogleドライブ・LINEなどで新しいスマホに送る', style: TextStyle(fontSize: 13, color: AppColors.textMid, height: 1.6)),
+      SizedBox(height: 6),
+      Text('③ 新しいスマホでぺとろぐを開き\nこの画面から「ファイルを選んで復元」をタップ', style: TextStyle(fontSize: 13, color: AppColors.textMid, height: 1.6)),
+      SizedBox(height: 12),
+      Text('⚠️ 復元すると現在のデータは上書きされます', style: TextStyle(fontSize: 11, color: Colors.orange)),
+    ])),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('閉じる', style: TextStyle(color: AppColors.textMid))),
       ElevatedButton(onPressed: () async {
         Navigator.pop(ctx);
-        // 実際の実装では file_picker で選択
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ファイルを選択して復元してください')));
-      }, child: const Text('ファイルを選ぶ'))],
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ファイル選択機能は次のバージョンで対応予定です')));
+      }, child: const Text('ファイルを選んで復元')),
+    ],
   ));
 }
 

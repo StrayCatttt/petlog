@@ -203,7 +203,18 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
   bool _isShared = false;
   int? _selectedPetId;
 
-  @override void initState() { super.initState(); _selectedPetId = context.read<AppProvider>().activePet?.id; }
+  @override void initState() {
+    super.initState();
+    final provider = context.read<AppProvider>();
+    // ✅ 現在のフィルタから初期値を決定
+    if (provider.expensePetFilter == null) {
+      _isShared = false;
+      _selectedPetId = provider.activePet?.id;
+    } else {
+      _isShared = false;
+      _selectedPetId = provider.expensePetFilter;
+    }
+  }
 
   @override Widget build(BuildContext context) => _ExpenseFormSheet(
     title: '💰 支出を追加', pets: widget.pets, cat: _cat, onCatChanged: (c) => setState(() => _cat = c),
