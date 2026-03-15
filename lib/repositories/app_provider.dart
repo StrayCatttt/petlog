@@ -70,8 +70,6 @@ class AppProvider extends ChangeNotifier {
       _rewardWatched=p.getString('reward_date')==today;
     } else { _quotaUsed=0; _quotaBonus=0; _rewardWatched=false; }
     _notifSettings=NotificationSettings(
-      vaccineReminder:p.getBool('notif_vaccine')??true,
-      vaccineDaysBefore:p.getInt('notif_vaccine_days')??7,
       anniversaryNotify:p.getBool('notif_anniversary')??true,
       notifySound:p.getString('notif_sound')??'default',
       defaultNotifyMinutesBefore:p.getInt('notif_default_minutes')??30,
@@ -81,8 +79,6 @@ class AppProvider extends ChangeNotifier {
   Future<void> saveNotifSettings(NotificationSettings s) async {
     _notifSettings=s;
     final p=await SharedPreferences.getInstance();
-    await p.setBool('notif_vaccine',s.vaccineReminder);
-    await p.setInt('notif_vaccine_days',s.vaccineDaysBefore);
     await p.setBool('notif_anniversary',s.anniversaryNotify);
     await p.setString('notif_sound',s.notifySound);
     await p.setInt('notif_default_minutes',s.defaultNotifyMinutesBefore);

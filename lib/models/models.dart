@@ -103,13 +103,10 @@ class Expense {
 }
 
 class NotificationSettings {
-  final bool vaccineReminder;
-  final int vaccineDaysBefore;
   final bool anniversaryNotify;
   final String notifySound; // 'default','vibrate','silent'
-  final int defaultNotifyMinutesBefore; // 全般のデフォルト通知タイミング
+  final int defaultNotifyMinutesBefore;
   const NotificationSettings({
-    this.vaccineReminder=true,this.vaccineDaysBefore=7,
     this.anniversaryNotify=true,this.notifySound='default',
     this.defaultNotifyMinutesBefore=30});
 }

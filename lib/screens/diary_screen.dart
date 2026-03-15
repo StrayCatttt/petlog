@@ -25,7 +25,6 @@ class DiaryScreen extends StatelessWidget {
           title: const Text('📅 思い出カレンダー', style: TextStyle(fontWeight: FontWeight.bold)),
           backgroundColor: const Color(0xFFFBF0DE), floating: true,
           actions: [
-            // ✅ ソートボタン
             PopupMenuButton<DiarySort>(
               icon: const Icon(Icons.sort, color: AppColors.caramel),
               onSelected: (s) => provider.setDiarySort(s),
@@ -59,7 +58,6 @@ class _DiaryCard extends StatelessWidget {
   @override Widget build(BuildContext context) {
     final firstPhoto = entry.photoUris.isNotEmpty ? entry.photoUris.first : null;
     final isVideo = firstPhoto != null && (firstPhoto.endsWith('.mp4') || firstPhoto.endsWith('.mov'));
-    // ✅ ペット名バッジ
     final petName = entry.isShared ? '共通' : pets.firstWhere((p)=>p.id==entry.petId, orElse:()=>Pet(name:'不明',createdAt:DateTime.now())).name;
     return Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: PetoCard(onTap: (){}, onLongPress: ()=>_showOptions(context),
@@ -113,38 +111,49 @@ class _AddDiaryDialog extends StatefulWidget {
 class _AddDiaryDialogState extends State<_AddDiaryDialog> {
   DiaryMood _mood = DiaryMood.happy;
   final _bodyCtrl = TextEditingController();
-  // ✅ 確認済みメディアのみ保持
   final List<String> _confirmedMedia = [];
   bool _picking = false;
-  // ✅ 対象ペット（-1=共通）
+  bool _saving = false;
   late int _selectedPetId;
+
+  // ✅ ダイアログ開いた時点の上限を固定で記録（保存前に変化させない）
+  late int _maxPhotos;
 
   @override void initState() {
     super.initState();
     _selectedPetId = widget.provider.activePet?.id ?? -1;
+    // ✅ 開いた時点のquotaを固定（途中でrewardが変わっても表示がおかしくならない）
+    _maxPhotos = widget.provider.isPro ? 30 : widget.provider.quotaTotal - widget.provider.quotaUsed;
+    if (_maxPhotos < 0) _maxPhotos = 0;
   }
 
-  // ✅ ファイル存在確認してから追加（失敗しても枠を消費しない）
-  Future<void> _pickMedia({bool video = false}) async {
+  // ✅ ファイル確認後のみ追加（キャンセルは何もしない）
+  Future<void> _pickMedia({bool video = false, ImageSource source = ImageSource.gallery}) async {
     if (_picking) return;
     setState(() => _picking = true);
     try {
       final picker = ImagePicker();
       if (video) {
-        final f = await picker.pickVideo(source: ImageSource.gallery);
-        if (f != null) {
-          final exists = await File(f.path).exists();
-          if (exists) setState(() => _confirmedMedia.add(f.path));
+        final f = await picker.pickVideo(source: source);
+        // ✅ nullチェック・ファイル存在確認してから追加
+        if (f != null && await File(f.path).exists()) {
+          if (mounted) setState(() => _confirmedMedia.add(f.path));
         }
       } else {
         final files = await picker.pickMultiImage();
+        // ✅ キャンセル（空リスト）でも何もしない
+        final valid = <String>[];
         for (final f in files) {
-          final exists = await File(f.path).exists();
-          if (exists) setState(() => _confirmedMedia.add(f.path));
+          if (await File(f.path).exists()) valid.add(f.path);
         }
+        if (valid.isNotEmpty && mounted) setState(() => _confirmedMedia.addAll(valid));
       }
-    } catch (e) { debugPrint('pick error: $e'); }
-    finally { if (mounted) setState(() => _picking = false); }
+    } catch (e) {
+      debugPrint('pick error: $e');
+    } finally {
+      // ✅ 必ずfalseに戻す
+      if (mounted) setState(() => _picking = false);
+    }
   }
 
   void _showPickOptions() {
@@ -154,34 +163,30 @@ class _AddDiaryDialogState extends State<_AddDiaryDialog> {
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(leading: const Icon(Icons.photo_library, color: AppColors.caramel), title: const Text('写真をギャラリーから'), onTap: () { Navigator.pop(ctx); _pickMedia(); }),
         ListTile(leading: const Icon(Icons.videocam, color: AppColors.caramel), title: const Text('動画をギャラリーから'), onTap: () { Navigator.pop(ctx); _pickMedia(video: true); }),
-        ListTile(leading: const Icon(Icons.camera_alt, color: AppColors.caramel), title: const Text('カメラで撮影'), onTap: () async { Navigator.pop(ctx); setState(() => _picking = true); try { final f = await ImagePicker().pickImage(source: ImageSource.camera); if (f != null && await File(f.path).exists()) setState(() => _confirmedMedia.add(f.path)); } finally { if (mounted) setState(() => _picking = false); } }),
+        ListTile(leading: const Icon(Icons.camera_alt, color: AppColors.caramel), title: const Text('カメラで撮影'), onTap: () { Navigator.pop(ctx); _pickMedia(source: ImageSource.camera); }),
       ]),
     ));
   }
 
   @override Widget build(BuildContext context) {
-    final provider = context.watch<AppProvider>();
-    // ✅ quotaRemaining はリアルタイムで取得（追加操作でも変わらない）
-    final limit = provider.isPro ? 30 : provider.quotaRemaining;
-    final canAddMore = _confirmedMedia.length < limit;
+    // ✅ 追加できる枚数は _maxPhotos - 現在追加枚数
+    final canAddMore = _confirmedMedia.length < _maxPhotos;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+      child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(20), child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         const Text('📝 新しい記録を追加', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark)),
         const SizedBox(height: 14),
-
-        // ✅ 対象ペット選択
+        // 対象ペット
         const Text('対象', style: TextStyle(fontSize: 12, color: AppColors.textLight)), const SizedBox(height: 6),
         SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
-          // 共通
           _PetChip(label: '🌐 共通', selected: _selectedPetId == -1, onTap: () => setState(() => _selectedPetId = -1)),
           const SizedBox(width: 6),
-          ...provider.activePets.map((pet) => Padding(padding: const EdgeInsets.only(right: 6), child:
-            _PetChip(label: '${pet.species.emoji} ${pet.name}', selected: _selectedPetId == pet.id, onTap: () => setState(() => _selectedPetId = pet.id!)))),
+          ...widget.provider.activePets.map((pet) => Padding(padding: const EdgeInsets.only(right: 6),
+            child: _PetChip(label: '${pet.species.emoji} ${pet.name}', selected: _selectedPetId == pet.id, onTap: () => setState(() => _selectedPetId = pet.id!)))),
         ])),
-
         const SizedBox(height: 12),
         // 気分タグ
         const Text('気分タグ', style: TextStyle(fontSize: 12, color: AppColors.textLight)), const SizedBox(height: 6),
@@ -191,19 +196,21 @@ class _AddDiaryDialogState extends State<_AddDiaryDialog> {
             decoration: BoxDecoration(shape: BoxShape.circle, color: _mood == m ? AppColors.caramelPale : Colors.transparent, border: Border.all(color: _mood == m ? AppColors.caramel : Colors.transparent, width: 1.5)),
             child: Text(m.emoji, style: const TextStyle(fontSize: 26))),
         )).toList())),
-
         const SizedBox(height: 12),
+        // 本文
         const Text('本文', style: TextStyle(fontSize: 12, color: AppColors.textLight)), const SizedBox(height: 4),
         TextField(controller: _bodyCtrl, maxLines: 3, decoration: const InputDecoration(hintText: '今日の様子を書いてみよう…', hintStyle: TextStyle(color: AppColors.textLight))),
-
         const SizedBox(height: 12),
+        // 写真・動画
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          // ✅ 表示は「現在追加枚数 / 上限」。quotaRemainingは変えない
-          Text('写真・動画（${_confirmedMedia.length}枚追加 / 最大${limit}枚）', style: const TextStyle(fontSize: 12, color: AppColors.textLight)),
+          Text(
+            widget.provider.isPro
+              ? '写真・動画（${_confirmedMedia.length}枚）'
+              : '写真・動画（${_confirmedMedia.length} / ${_maxPhotos}枚）',
+            style: const TextStyle(fontSize: 12, color: AppColors.textLight)),
           if (_picking) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.caramel)),
         ]),
         const SizedBox(height: 6),
-
         // プレビュー
         if (_confirmedMedia.isNotEmpty) ...[
           SizedBox(height: 80, child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: _confirmedMedia.length, itemBuilder: (ctx, i) {
@@ -219,33 +226,50 @@ class _AddDiaryDialogState extends State<_AddDiaryDialog> {
           })),
           const SizedBox(height: 8),
         ],
-
-        // ✅ 「写真・動画を追加」ボタン（はっきりした色）
-        if (canAddMore && !_picking)
+        // ✅ 追加ボタン：_pickingがtrueでもボタンは残す（ローディング表示）
+        // ✅ canAddMoreがfalseでもPro以外は上限に達したメッセージを表示
+        if (canAddMore)
           ElevatedButton.icon(
-            onPressed: _showPickOptions,
-            icon: const Icon(Icons.add_photo_alternate, size: 20),
-            label: const Text('📷 写真・動画を追加', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            onPressed: _picking ? null : _showPickOptions,
+            icon: _picking
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.add_photo_alternate, size: 20),
+            label: Text(_picking ? '読み込み中...' : '📷 写真・動画を追加', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             style: ElevatedButton.styleFrom(
               minimumSize: const Size(double.infinity, 48),
-              backgroundColor: AppColors.sage,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
+              backgroundColor: AppColors.sage, foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          )
+        else if (!widget.provider.isPro && _maxPhotos > 0)
+          Container(
+            width: double.infinity, padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.shade200)),
+            child: const Text('📷 今日の写真枠が上限に達しました\n動画広告を見ると枠を増やせます', style: TextStyle(fontSize: 12, color: Colors.orange), textAlign: TextAlign.center),
           ),
-
         const SizedBox(height: 16),
         Row(children: [
-          Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル', style: TextStyle(color: AppColors.textMid)))),
+          Expanded(child: OutlinedButton(
+            onPressed: _saving ? null : () => Navigator.pop(context),
+            child: const Text('キャンセル', style: TextStyle(color: AppColors.textMid)))),
           const SizedBox(width: 12),
-          // ✅ 常に保存可能（本文のみでもOK）
+          // ✅ 保存ボタン：常に押せる（本文のみでもOK）
           Expanded(child: ElevatedButton(
-            onPressed: () async {
-              await provider.addDiaryEntry(petId: _selectedPetId, mood: _mood, body: _bodyCtrl.text, photoUris: _confirmedMedia);
-              if (mounted) Navigator.pop(context);
+            onPressed: _saving ? null : () async {
+              setState(() => _saving = true);
+              try {
+                await widget.provider.addDiaryEntry(
+                  petId: _selectedPetId, mood: _mood,
+                  body: _bodyCtrl.text, photoUris: _confirmedMedia);
+                if (mounted) Navigator.pop(context);
+              } catch (e) {
+                debugPrint('save error: $e');
+                if (mounted) setState(() => _saving = false);
+              }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.caramel, minimumSize: const Size(double.infinity, 48)),
-            child: const Text('✓ 保存する', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            child: _saving
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('✓ 保存する', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           )),
         ]),
       ]))),
@@ -279,6 +303,7 @@ class _EditDiaryDialogState extends State<_EditDiaryDialog> {
   late List<String> _media;
   late int _selectedPetId;
   bool _picking = false;
+  bool _saving = false;
 
   @override void initState() {
     super.initState();
@@ -295,10 +320,12 @@ class _EditDiaryDialogState extends State<_EditDiaryDialog> {
       final picker = ImagePicker();
       if (video) {
         final f = await picker.pickVideo(source: ImageSource.gallery);
-        if (f != null && await File(f.path).exists()) setState(() => _media.add(f.path));
+        if (f != null && await File(f.path).exists() && mounted) setState(() => _media.add(f.path));
       } else {
         final files = await picker.pickMultiImage();
-        for (final f in files) { if (await File(f.path).exists()) setState(() => _media.add(f.path)); }
+        final valid = <String>[];
+        for (final f in files) { if (await File(f.path).exists()) valid.add(f.path); }
+        if (valid.isNotEmpty && mounted) setState(() => _media.addAll(valid));
       }
     } finally { if (mounted) setState(() => _picking = false); }
   }
@@ -306,19 +333,22 @@ class _EditDiaryDialogState extends State<_EditDiaryDialog> {
   @override Widget build(BuildContext context) => Dialog(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-    child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+    child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(20), child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
       const Text('✏️ 日記を編集', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark)),
       const SizedBox(height: 14),
-      // 対象ペット
       SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
         _PetChip(label: '🌐 共通', selected: _selectedPetId == -1, onTap: () => setState(() => _selectedPetId = -1)),
         const SizedBox(width: 6),
-        ...widget.pets.map((pet) => Padding(padding: const EdgeInsets.only(right: 6), child:
-          _PetChip(label: '${pet.species.emoji} ${pet.name}', selected: _selectedPetId == pet.id, onTap: () => setState(() => _selectedPetId = pet.id!)))),
+        ...widget.pets.map((pet) => Padding(padding: const EdgeInsets.only(right: 6),
+          child: _PetChip(label: '${pet.species.emoji} ${pet.name}', selected: _selectedPetId == pet.id, onTap: () => setState(() => _selectedPetId = pet.id!)))),
       ])),
       const SizedBox(height: 12),
-      SizedBox(height: 44, child: ListView(scrollDirection: Axis.horizontal, children: DiaryMood.values.map((m) => GestureDetector(onTap: () => setState(() => _mood = m),
-        child: Container(margin: const EdgeInsets.only(right: 6), padding: const EdgeInsets.all(5), decoration: BoxDecoration(shape: BoxShape.circle, color: _mood == m ? AppColors.caramelPale : Colors.transparent, border: Border.all(color: _mood == m ? AppColors.caramel : Colors.transparent, width: 1.5)), child: Text(m.emoji, style: const TextStyle(fontSize: 26))),
+      SizedBox(height: 44, child: ListView(scrollDirection: Axis.horizontal, children: DiaryMood.values.map((m) => GestureDetector(
+        onTap: () => setState(() => _mood = m),
+        child: Container(margin: const EdgeInsets.only(right: 6), padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: _mood == m ? AppColors.caramelPale : Colors.transparent, border: Border.all(color: _mood == m ? AppColors.caramel : Colors.transparent, width: 1.5)),
+          child: Text(m.emoji, style: const TextStyle(fontSize: 26))),
       )).toList())),
       const SizedBox(height: 12),
       TextField(controller: _bodyCtrl, maxLines: 3, decoration: const InputDecoration(hintText: '本文', hintStyle: TextStyle(color: AppColors.textLight))),
@@ -327,30 +357,47 @@ class _EditDiaryDialogState extends State<_EditDiaryDialog> {
         SizedBox(height: 80, child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: _media.length, itemBuilder: (ctx, i) {
           final isVideo = _media[i].endsWith('.mp4') || _media[i].endsWith('.mov');
           return Stack(children: [
-            Container(width: 80, height: 80, margin: const EdgeInsets.only(right: 8), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: isVideo ? Container(color: Colors.black87, child: const Center(child: Icon(Icons.play_circle, color: Colors.white, size: 32))) : Image.file(File(_media[i]), fit: BoxFit.cover, errorBuilder: (_,__,___) => Container(color: AppColors.caramelPale)))),
-            Positioned(top: 2, right: 10, child: GestureDetector(onTap: () => setState(() => _media.removeAt(i)), child: Container(width: 18, height: 18, decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white, size: 12)))),
+            Container(width: 80, height: 80, margin: const EdgeInsets.only(right: 8),
+              child: ClipRRect(borderRadius: BorderRadius.circular(10), child: isVideo
+                  ? Container(color: Colors.black87, child: const Center(child: Icon(Icons.play_circle, color: Colors.white, size: 32)))
+                  : Image.file(File(_media[i]), fit: BoxFit.cover, errorBuilder: (_,__,___) => Container(color: AppColors.caramelPale)))),
+            Positioned(top: 2, right: 10, child: GestureDetector(onTap: () => setState(() => _media.removeAt(i)),
+              child: Container(width: 18, height: 18, decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white, size: 12)))),
           ]);
         })),
         const SizedBox(height: 8),
       ],
-      ElevatedButton.icon(onPressed: () => showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text('メディアを追加'), content: Column(mainAxisSize: MainAxisSize.min, children: [
-        ListTile(leading: const Icon(Icons.photo_library, color: AppColors.caramel), title: const Text('写真'), onTap: () { Navigator.pop(ctx); _pickMedia(); }),
-        ListTile(leading: const Icon(Icons.videocam, color: AppColors.caramel), title: const Text('動画'), onTap: () { Navigator.pop(ctx); _pickMedia(video: true); }),
-      ]))),
-        icon: const Icon(Icons.add_photo_alternate, size: 18),
-        label: const Text('写真・動画を追加', style: TextStyle(fontWeight: FontWeight.bold)),
+      ElevatedButton.icon(
+        onPressed: _picking ? null : () => showDialog(context: context, builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('メディアを追加'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(leading: const Icon(Icons.photo_library, color: AppColors.caramel), title: const Text('写真'), onTap: () { Navigator.pop(ctx); _pickMedia(); }),
+            ListTile(leading: const Icon(Icons.videocam, color: AppColors.caramel), title: const Text('動画'), onTap: () { Navigator.pop(ctx); _pickMedia(video: true); }),
+          ]))),
+        icon: _picking
+            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : const Icon(Icons.add_photo_alternate, size: 18),
+        label: Text(_picking ? '読み込み中...' : '写真・動画を追加', style: const TextStyle(fontWeight: FontWeight.bold)),
         style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 44), backgroundColor: AppColors.sage, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)))),
       const SizedBox(height: 16),
       Row(children: [
-        Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル', style: TextStyle(color: AppColors.textMid)))),
+        Expanded(child: OutlinedButton(onPressed: _saving ? null : () => Navigator.pop(context), child: const Text('キャンセル', style: TextStyle(color: AppColors.textMid)))),
         const SizedBox(width: 12),
         Expanded(child: ElevatedButton(
-          onPressed: () async {
-            await context.read<AppProvider>().updateDiaryEntry(widget.entry.copyWith(petId: _selectedPetId, mood: _mood, body: _bodyCtrl.text, photoUris: _media));
-            if (mounted) Navigator.pop(context);
+          onPressed: _saving ? null : () async {
+            setState(() => _saving = true);
+            try {
+              await context.read<AppProvider>().updateDiaryEntry(widget.entry.copyWith(petId: _selectedPetId, mood: _mood, body: _bodyCtrl.text, photoUris: _media));
+              if (mounted) Navigator.pop(context);
+            } catch (e) {
+              if (mounted) setState(() => _saving = false);
+            }
           },
           style: ElevatedButton.styleFrom(backgroundColor: AppColors.caramel, minimumSize: const Size(double.infinity, 44)),
-          child: const Text('✓ 保存', style: TextStyle(fontWeight: FontWeight.bold)),
+          child: _saving
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('✓ 保存', style: TextStyle(fontWeight: FontWeight.bold)),
         )),
       ]),
     ]))),

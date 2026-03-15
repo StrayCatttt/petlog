@@ -320,6 +320,8 @@ class _AddScheduleDialogState extends State<_AddScheduleDialog> {
   TimeOfDay _time = TimeOfDay.now();
   bool _notify = true;
   int _notifyMinutes = 30; // デフォルト30分前
+  bool _isCustom = false;
+  int _customMinutes = 60;
 
   @override Widget build(BuildContext context) => AlertDialog(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -347,16 +349,34 @@ class _AddScheduleDialogState extends State<_AddScheduleDialog> {
         title: const Text('通知する', style: TextStyle(fontSize: 13)), activeColor: AppColors.caramel, contentPadding: EdgeInsets.zero, dense: true),
       if (_notify) ...[
         const Text('通知タイミング', style: TextStyle(fontSize: 11, color: AppColors.textLight)),
-        Wrap(spacing: 6, children: [
-          for (final entry in {0:"当日",10:"10分前",30:"30分前",60:"1時間前",360:"6時間前",720:"12時間前"}.entries)
+        Wrap(spacing: 6, runSpacing: 4, children: [
+          for (final e in {0:"当日",10:"10分前",30:"30分前",60:"1時間前",360:"6時間前",720:"12時間前",1440:"1日前"}.entries)
             ChoiceChip(
-              label: Text(entry.value, style: const TextStyle(fontSize: 11)),
-              selected: _notifyMinutes == entry.key,
-              onSelected: (_) => setState(() => _notifyMinutes = entry.key),
+              label: Text(e.value, style: const TextStyle(fontSize: 11)),
+              selected: _notifyMinutes == e.key && !_isCustom,
+              onSelected: (_) => setState(() { _notifyMinutes = e.key; _isCustom = false; }),
               selectedColor: AppColors.caramel,
-              labelStyle: TextStyle(color: _notifyMinutes == entry.key ? Colors.white : AppColors.textMid),
+              labelStyle: TextStyle(color: (_notifyMinutes == e.key && !_isCustom) ? Colors.white : AppColors.textMid),
             ),
+          ChoiceChip(
+            label: const Text('カスタム', style: TextStyle(fontSize: 11)),
+            selected: _isCustom,
+            onSelected: (_) async {
+              setState(() => _isCustom = true);
+              final ctrl = TextEditingController(text: _customMinutes.toString());
+              final result = await showDialog<int>(context: context, builder: (ctx) => AlertDialog(
+                title: const Text('カスタム通知（分前）'),
+                content: TextField(controller: ctrl, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: '例：120（2時間前）', hintStyle: TextStyle(color: AppColors.textLight))),
+                actions: [TextButton(onPressed:()=>Navigator.pop(ctx), child: const Text('キャンセル')), ElevatedButton(onPressed:()=>Navigator.pop(ctx,int.tryParse(ctrl.text)), child: const Text('OK'))],
+              ));
+              if (result != null && result > 0) setState(() => _customMinutes = result);
+            },
+            selectedColor: AppColors.caramel,
+            labelStyle: TextStyle(color: _isCustom ? Colors.white : AppColors.textMid),
+          ),
         ]),
+        if (_isCustom) Padding(padding: const EdgeInsets.only(top: 4),
+          child: Text('$_customMinutes 分前に通知', style: const TextStyle(fontSize: 11, color: AppColors.caramel, fontWeight: FontWeight.bold))),
       ],
     ])),
     actions: [
@@ -368,7 +388,7 @@ class _AddScheduleDialogState extends State<_AddScheduleDialog> {
             petId: context.read<AppProvider>().activePet?.id,
             dateTime: dt, title: _titleCtrl.text.trim(),
             note: _noteCtrl.text.isEmpty ? null : _noteCtrl.text,
-            notifyEnabled: _notify, notifyMinutesBefore: _notifyMinutes,
+            notifyEnabled: _notify, notifyMinutesBefore: _isCustom ? _customMinutes : _notifyMinutes,
             createdAt: DateTime.now()));
           if (mounted) Navigator.pop(context);
         },
@@ -385,8 +405,7 @@ class _NotifSettingsDialog extends StatefulWidget {
   @override State<_NotifSettingsDialog> createState() => _NotifSettingsDialogState();
 }
 class _NotifSettingsDialogState extends State<_NotifSettingsDialog> {
-  late bool _vaccineReminder, _anniversaryNotify;
-  late int _vaccineDays;
+  late bool _anniversaryNotify;
   late String _sound;
 
   late int _defaultNotifyMinutes;
@@ -394,7 +413,6 @@ class _NotifSettingsDialogState extends State<_NotifSettingsDialog> {
   @override void initState() {
     super.initState();
     final s = widget.settings;
-    _vaccineReminder = s.vaccineReminder; _vaccineDays = s.vaccineDaysBefore;
     _anniversaryNotify = s.anniversaryNotify; _sound = s.notifySound;
     _defaultNotifyMinutes = s.defaultNotifyMinutesBefore;
   }
@@ -418,14 +436,7 @@ class _NotifSettingsDialogState extends State<_NotifSettingsDialog> {
           ),
       ]),
       const Divider(),
-      SwitchListTile(value: _vaccineReminder, onChanged: (v) => setState(() => _vaccineReminder = v), activeColor: AppColors.caramel,
-        title: const Text('ワクチン・健診リマインダー', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-        subtitle: const Text('予定の前に通知', style: TextStyle(fontSize: 11)), contentPadding: EdgeInsets.zero, dense: true),
-      if (_vaccineReminder) Row(children: [
-        const Text('何日前に通知：', style: TextStyle(fontSize: 12, color: AppColors.textMid)),
-        DropdownButton<int>(value: _vaccineDays, items: [1,3,7,14,30].map((d) => DropdownMenuItem(value: d, child: Text('$d日前'))).toList(), onChanged: (v) => setState(() => _vaccineDays = v!)),
-      ]),
-      const Divider(),
+
       SwitchListTile(value: _anniversaryNotify, onChanged: (v) => setState(() => _anniversaryNotify = v), activeColor: AppColors.caramel,
         title: const Text('お迎え記念日の通知', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), contentPadding: EdgeInsets.zero, dense: true),
       const Divider(),
@@ -440,7 +451,6 @@ class _NotifSettingsDialogState extends State<_NotifSettingsDialog> {
       TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル', style: TextStyle(color: AppColors.textMid))),
       ElevatedButton(onPressed: () async {
         final settings = NotificationSettings(
-          vaccineReminder: _vaccineReminder, vaccineDaysBefore: _vaccineDays,
           anniversaryNotify: _anniversaryNotify, notifySound: _sound,
           defaultNotifyMinutesBefore: _defaultNotifyMinutes);
         await context.read<AppProvider>().saveNotifSettings(settings);

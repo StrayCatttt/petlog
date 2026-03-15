@@ -26,6 +26,17 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     });
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ✅ タブ切り替え時にも再ロード
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await context.read<AppProvider>().loadExpenses();
+      await _loadPastTotals();
+    });
+  }
+
   Future<void> _loadPastTotals() async {
     final totals = await context.read<AppProvider>().getPast3MonthTotals();
     if (mounted) setState(() => _pastTotals = totals);

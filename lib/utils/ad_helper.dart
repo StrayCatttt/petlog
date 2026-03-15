@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'ad_config.dart';
@@ -26,13 +27,13 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
   }
 }
 
-// ─── リワード広告（視聴完了のみ付与） ────────────────
+// ─── リワード広告 ─────────────────────────────────────
+// ✅ Completerで「広告終了まで待機」してから結果を返す
+// ✅ onUserEarnedReward が呼ばれた場合のみ true（視聴完了）
 
 class RewardAdManager {
   RewardedAd? _ad;
   bool _loading = false;
-  // ✅ 視聴中フラグ（アプリを閉じて戻っても報酬付与しない）
-  bool _earnedDuringSession = false;
 
   void loadAd() {
     if (_loading || _ad != null) return;
@@ -47,43 +48,43 @@ class RewardAdManager {
     );
   }
 
-  /// 広告を表示。
-  /// ✅ onUserEarnedReward が呼ばれた場合のみ true を返す。
-  /// アプリ再起動・途中離脱では false を返す。
+  /// 広告を表示し、視聴完了なら true を返す。
+  /// 途中で閉じた・アプリ切り替えなど → false を返す。
   Future<bool> show(BuildContext context) async {
-    _earnedDuringSession = false;
-
     if (_ad == null) {
-      // 広告未ロード時はフォールバック（開発用）
       loadAd();
-      // 本番では false を返してフォールバックしない
-      return false;
+      return false; // 広告未準備は付与しない
     }
 
-    bool earned = false;
-    final completer = Future<bool>.value(false); // unused but typed
+    // ✅ Completerで終了を待つ
+    final completer = Completer<bool>();
+    bool _rewarded = false;
 
     _ad!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
-        ad.dispose(); _ad = null; loadAd();
-        // ✅ dismiss時点でearnedがtrueでなければ付与しない
+        ad.dispose();
+        _ad = null;
+        loadAd(); // 次回用に先読み
+        // ✅ 広告が閉じられた時点で結果を確定（視聴完了していれば true）
+        if (!completer.isCompleted) completer.complete(_rewarded);
       },
-      onAdFailedToShowFullScreenContent: (ad, _) {
-        ad.dispose(); _ad = null;
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        ad.dispose();
+        _ad = null;
+        if (!completer.isCompleted) completer.complete(false);
       },
     );
 
     await _ad!.show(
       onUserEarnedReward: (ad, reward) {
-        // ✅ 視聴完了コールバックのみでフラグON
-        earned = true;
-        _earnedDuringSession = true;
+        // ✅ 視聴完了コールバック：ここだけでフラグON
+        _rewarded = true;
       },
     );
 
-    return earned;
+    // 広告が閉じられるまで待機
+    return completer.future;
   }
 }
 
-// グローバルシングルトン
 final rewardAdManager = RewardAdManager();
